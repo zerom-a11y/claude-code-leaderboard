@@ -2,6 +2,24 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-server'
 import type { BadgeKey } from '@/lib/badges'
 
+const PAGE_SIZE = 1000
+
+async function fetchAllSessionsForBadges(client: any) {
+  const rows: { user_id: string; total_tokens: number; created_at: string }[] = []
+  let from = 0
+  while (true) {
+    const { data, error } = await client
+      .from('sessions')
+      .select('user_id, total_tokens, created_at')
+      .range(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    rows.push(...(data || []))
+    if (!data || data.length < PAGE_SIZE) break
+    from += PAGE_SIZE
+  }
+  return rows
+}
+
 export async function GET(request: NextRequest) {
   // Vercel Cron 인증
   const authHeader = request.headers.get('authorization')
@@ -25,11 +43,8 @@ export async function GET(request: NextRequest) {
     (existingBadges || []).map(b => `${b.user_id}:${b.badge_key}`)
   )
 
-  // 전체 세션 조회
-  const { data: sessions } = await supabase
-    .from('sessions')
-    .select('user_id, total_tokens, created_at')
-  const allSessions = sessions || []
+  // 전체 세션 조회 (페이지네이션)
+  const allSessions = await fetchAllSessionsForBadges(supabase)
 
   const newBadges: { user_id: string; badge_key: BadgeKey }[] = []
 

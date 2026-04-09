@@ -4,6 +4,7 @@ import { ACHIEVEMENT_BADGES } from '@/lib/badges'
 
 type Entry = {
   rank: number
+  user_id?: string
   nickname: string
   department: string
   total_tokens: number
@@ -57,7 +58,7 @@ export default function LeaderboardTable({ data, loading }: { data: Entry[]; loa
         </thead>
         <tbody>
           {data.map(entry => (
-            <tr key={entry.rank}
+            <tr key={entry.user_id || entry.rank}
               className={`border-b border-gray-800/50 ${entry.isMe ? 'bg-blue-500/10' : 'hover:bg-gray-800/50'}`}>
               <td className="py-3 px-4 font-mono text-gray-400">
                 {entry.rank <= 3 ? ['\u{1F947}', '\u{1F948}', '\u{1F949}'][entry.rank - 1] : entry.rank}
