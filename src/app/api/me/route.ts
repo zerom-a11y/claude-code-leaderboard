@@ -15,7 +15,12 @@ export async function GET() {
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
 
-  return NextResponse.json({ profile, sessions })
+  const { data: badges } = await supabase
+    .from('user_badges')
+    .select('badge_key, earned_at')
+    .eq('user_id', user.id)
+
+  return NextResponse.json({ profile, sessions, badges: badges || [] })
 }
 
 export async function PATCH(request: NextRequest) {
