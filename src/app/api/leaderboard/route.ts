@@ -90,6 +90,19 @@ export async function GET(request: NextRequest) {
     const { data: users, error: usersError } = await usersQuery
     if (usersError) return NextResponse.json({ error: usersError.message }, { status: 500 })
 
+    // 뱃지 조회
+    const { data: badges } = await serviceClient
+      .from('user_badges')
+      .select('user_id, badge_key')
+      .in('user_id', userIds)
+
+    const userBadgesMap = new Map<string, string[]>()
+    for (const b of badges || []) {
+      const list = userBadgesMap.get(b.user_id) || []
+      list.push(b.badge_key)
+      userBadgesMap.set(b.user_id, list)
+    }
+
     // 순위 계산
     const result = (users || [])
       .map(u => ({
@@ -101,6 +114,7 @@ export async function GET(request: NextRequest) {
         bio: u.bio || '',
         total_tokens: userTotals.get(u.id) || 0,
         all_time_tokens: userAllTimeTotals.get(u.id) || 0,
+        badges: userBadgesMap.get(u.id) || [],
         isMe: u.id === user.id,
       }))
       .filter(u => u.total_tokens > 0)
