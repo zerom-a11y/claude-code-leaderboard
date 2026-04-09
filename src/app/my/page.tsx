@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { ACHIEVEMENT_BADGES } from '@/lib/badges'
 
 const BIO_MAX_LENGTH = 50
 
@@ -22,6 +23,7 @@ export default function MyPage() {
   const [bio, setBio] = useState('')
   const [bioSaving, setBioSaving] = useState(false)
   const [bioMessage, setBioMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [badges, setBadges] = useState<{ badge_key: string; earned_at: string }[]>([])
 
   useEffect(() => {
     fetch('/api/me')
@@ -30,6 +32,7 @@ export default function MyPage() {
         setProfile(json.profile)
         setSessions(json.sessions || [])
         setBio(json.profile?.bio || '')
+        setBadges(json.badges || [])
         setLoading(false)
       })
       .catch(() => setLoading(false))
@@ -128,6 +131,37 @@ export default function MyPage() {
         <div className="bg-gray-100 rounded-lg p-4">
           <p className="text-sm text-gray-500">총 토큰</p>
           <p className="text-xl font-bold mt-1 text-gray-900">{formatTokens(totalTokens)}</p>
+        </div>
+      </div>
+
+      <div className="bg-gray-100 rounded-lg p-4">
+        <h2 className="text-sm text-gray-500 mb-3">업적 뱃지</h2>
+        <div className="grid grid-cols-3 gap-3">
+          {ACHIEVEMENT_BADGES.map(badge => {
+            const earned = badges.find(b => b.badge_key === badge.key)
+            return (
+              <div
+                key={badge.key}
+                className={`rounded-lg p-3 text-center ${
+                  earned ? 'bg-white' : 'bg-gray-200 opacity-40'
+                }`}
+                title={earned
+                  ? `${badge.name}: ${badge.description} (${new Date(earned.earned_at).toLocaleDateString('ko-KR')} 획득)`
+                  : `${badge.name}: ${badge.description}`
+                }
+              >
+                <div className="text-2xl mb-1">{badge.emoji}</div>
+                <div className={`text-xs font-medium ${earned ? 'text-gray-900' : 'text-gray-400'}`}>
+                  {badge.name}
+                </div>
+                {earned && (
+                  <div className="text-xs text-gray-400 mt-0.5">
+                    {new Date(earned.earned_at).toLocaleDateString('ko-KR')}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       </div>
 
