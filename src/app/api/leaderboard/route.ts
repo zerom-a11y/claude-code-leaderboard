@@ -1,31 +1,5 @@
 import { createClient, createServiceClient } from '@/lib/supabase-server'
 import { NextRequest, NextResponse } from 'next/server'
-import { SupabaseClient } from '@supabase/supabase-js'
-
-const PAGE_SIZE = 1000
-
-async function fetchAllSessions(client: SupabaseClient, sinceDate: string | null) {
-  const rows: { user_id: string; total_tokens: number }[] = []
-  let from = 0
-  while (true) {
-    let q = client.from('sessions').select('user_id, total_tokens').range(from, from + PAGE_SIZE - 1)
-    if (sinceDate) q = q.gte('created_at', sinceDate)
-    const { data, error } = await q
-    if (error) throw error
-    rows.push(...(data || []))
-    if (!data || data.length < PAGE_SIZE) break
-    from += PAGE_SIZE
-  }
-  return rows
-}
-
-function aggregateByUser(sessions: { user_id: string; total_tokens: number }[]) {
-  const totals = new Map<string, number>()
-  for (const s of sessions) {
-    totals.set(s.user_id, (totals.get(s.user_id) || 0) + (s.total_tokens || 0))
-  }
-  return totals
-}
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
@@ -52,9 +26,8 @@ export async function GET(request: NextRequest) {
   if (period === 'daily') {
     sinceDate = new Date(`${kstToday}T00:00:00+09:00`).toISOString()
   } else if (period === 'weekly') {
-    // ISO 8601 주차: 월요일 시작
-    const kstDay = kstNow.getUTCDay() // 0=일 ~ 6=토
-    const daysSinceMonday = (kstDay + 6) % 7 // 월=0, 화=1, ..., 일=6
+    const kstDay = kstNow.getUTCDay()
+    const daysSinceMonday = (kstDay + 6) % 7
     const monday = new Date(kstNow.getTime() - daysSinceMonday * 24 * 60 * 60 * 1000)
     const mondayDate = monday.toISOString().split('T')[0]
     sinceDate = new Date(`${mondayDate}T00:00:00+09:00`).toISOString()
@@ -63,65 +36,119 @@ export async function GET(request: NextRequest) {
   const serviceClient = createServiceClient()
 
   try {
-    // 기간별 sessions + all-time sessions 페이지네이션으로 전체 조회
-    const [periodSessions, allTimeSessions] = await Promise.all([
-      fetchAllSessions(serviceClient, sinceDate),
-      period === 'all' ? Promise.resolve(null) : fetchAllSessions(serviceClient, null),
-    ])
-
-    const userTotals = aggregateByUser(periodSessions)
-    const userAllTimeTotals = allTimeSessions ? aggregateByUser(allTimeSessions) : userTotals
-
-    // 사용량이 있는 사용자만 조회
-    const userIds = Array.from(userTotals.keys())
-    if (userIds.length === 0) {
-      return NextResponse.json({ data: [] })
+    // 1. RPC로 서버사이드 집계 (기간별 + 누적 토큰 한번에)
+    const { data: leaderboard, error: rpcError } = await serviceClient
+      .rpc('get_leaderboard', { since_date: sinceDate, role_filter: role })
+    if (rpcError) return NextResponse.json({ error: rpcError.message }, { status: 500 })
+    if (!leaderboard || leaderboard.length === 0) {
+      return NextResponse.json({ data: [] }, {
+        headers: { 'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30' },
+      })
     }
 
-    let usersQuery = serviceClient
-      .from('users')
-      .select('id, nickname, department, role, buddy, bio')
-      .in('id', userIds)
+    const userIds = leaderboard.map((r: any) => r.user_id)
 
-    if (role !== 'all') {
-      usersQuery = usersQuery.eq('role', role)
-    }
-
-    const { data: users, error: usersError } = await usersQuery
-    if (usersError) return NextResponse.json({ error: usersError.message }, { status: 500 })
-
-    // 뱃지 조회
-    const { data: badges } = await serviceClient
+    // 2. 뱃지 + rate limit 병렬 조회
+    const badgesPromise = serviceClient
       .from('user_badges')
       .select('user_id, badge_key')
       .in('user_id', userIds)
 
+    // 현재 유저의 api_token 조회 (메인 페이지에서 /api/me 호출 제거용)
+    const tokenPromise = serviceClient
+      .from('users')
+      .select('api_token')
+      .eq('id', user.id)
+      .single()
+
+    // rate limit 쿼리 (누적 탭에서는 스킵)
+    const snapshotsPromise = period !== 'all'
+      ? serviceClient
+          .from('rate_limit_snapshots')
+          .select('user_id, five_hour_pct, seven_day_pct, seven_day_resets_at')
+          .in('user_id', userIds)
+          .order('created_at', { ascending: false })
+      : null
+    const hitCountPromise = period !== 'all'
+      ? serviceClient
+          .from('rate_limit_snapshots')
+          .select('user_id, five_hour_resets_at')
+          .in('user_id', userIds)
+          .gte('five_hour_pct', 100)
+          .not('five_hour_resets_at', 'is', null)
+      : null
+
+    // 뱃지 + 토큰 + rate limit 모두 병렬 실행
+    const [badgesResult, tokenResult, snapshotsResult, hitCountResult] = await Promise.all([
+      badgesPromise,
+      tokenPromise,
+      snapshotsPromise,
+      hitCountPromise,
+    ])
+
+    // 뱃지 매핑
     const userBadgesMap = new Map<string, string[]>()
-    for (const b of badges || []) {
+    for (const b of badgesResult.data || []) {
       const list = userBadgesMap.get(b.user_id) || []
       list.push(b.badge_key)
       userBadgesMap.set(b.user_id, list)
     }
 
-    // 순위 계산
-    const result = (users || [])
-      .map(u => ({
-        user_id: u.id,
-        nickname: u.nickname,
-        department: u.department,
-        role: u.role,
-        buddy: u.buddy ?? false,
-        bio: u.bio || '',
-        total_tokens: userTotals.get(u.id) || 0,
-        all_time_tokens: userAllTimeTotals.get(u.id) || 0,
-        badges: userBadgesMap.get(u.id) || [],
-        isMe: u.id === user.id,
-      }))
-      .filter(u => u.total_tokens > 0)
-      .sort((a, b) => b.total_tokens - a.total_tokens)
-      .map((u, i) => ({ ...u, rank: i + 1 }))
+    // rate limit 매핑
+    const rateLimitMap = new Map<string, { five_hour_pct: number; seven_day_pct: number; seven_day_resets_at: string | null; hit_100_count: number }>()
+    if (snapshotsResult?.data) {
+      const seen = new Set<string>()
+      for (const s of snapshotsResult.data) {
+        if (!seen.has(s.user_id)) {
+          seen.add(s.user_id)
+          rateLimitMap.set(s.user_id, {
+            five_hour_pct: Number(s.five_hour_pct) || 0,
+            seven_day_pct: Number(s.seven_day_pct) || 0,
+            seven_day_resets_at: s.seven_day_resets_at,
+            hit_100_count: 0,
+          })
+        }
+      }
+    }
+    if (hitCountResult?.data) {
+      const countMap = new Map<string, Set<string>>()
+      for (const s of hitCountResult.data) {
+        if (!countMap.has(s.user_id)) countMap.set(s.user_id, new Set())
+        countMap.get(s.user_id)!.add(s.five_hour_resets_at)
+      }
+      for (const [uid, resetTimes] of countMap) {
+        const existing = rateLimitMap.get(uid)
+        if (existing) existing.hit_100_count = resetTimes.size
+      }
+    }
 
-    return NextResponse.json({ data: result })
+    const apiToken = tokenResult?.data?.api_token || ''
+
+    // 결과 조합
+    const result = leaderboard.map((row: any, i: number) => {
+      const rl = rateLimitMap.get(row.user_id)
+      return {
+        rank: i + 1,
+        user_id: row.user_id,
+        nickname: row.nickname,
+        department: row.department,
+        role: row.role,
+        buddy: row.buddy ?? false,
+        bio: row.bio || '',
+        total_tokens: row.total_tokens,
+        all_time_tokens: row.all_time_tokens,
+        badges: userBadgesMap.get(row.user_id) || [],
+        isMe: row.user_id === user.id,
+        five_hour_pct: rl?.five_hour_pct ?? null,
+        seven_day_pct: rl?.seven_day_pct ?? null,
+        seven_day_resets_at: rl?.seven_day_resets_at ?? null,
+        hit_100_count: rl?.hit_100_count ?? 0,
+      }
+    })
+
+    return NextResponse.json({ data: result, api_token: apiToken }, {
+      headers: { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60' },
+    })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error'
     return NextResponse.json({ error: message }, { status: 500 })

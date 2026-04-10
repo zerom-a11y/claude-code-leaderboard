@@ -14,6 +14,7 @@ export async function GET() {
     .select('input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, total_tokens, created_at')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
+    .limit(500)
 
   const { data: badges } = await supabase
     .from('user_badges')

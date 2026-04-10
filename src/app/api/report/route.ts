@@ -54,6 +54,29 @@ export async function POST(request: NextRequest) {
       await supabase.from('users').update({ buddy: body.buddy }).eq('id', user.id)
     }
 
+    // rate_limits가 전송된 경우 스냅샷 저장
+    if (body.rate_limits) {
+      const rl = body.rate_limits
+      const fiveHourPct = rl.five_hour?.used_percentage ?? null
+      const fiveHourResetsAt = rl.five_hour?.resets_at
+        ? new Date(rl.five_hour.resets_at * 1000).toISOString()
+        : null
+      const sevenDayPct = rl.seven_day?.used_percentage ?? null
+      const sevenDayResetsAt = rl.seven_day?.resets_at
+        ? new Date(rl.seven_day.resets_at * 1000).toISOString()
+        : null
+
+      if (fiveHourPct !== null || sevenDayPct !== null) {
+        await supabase.from('rate_limit_snapshots').insert({
+          user_id: user.id,
+          five_hour_pct: fiveHourPct ?? 0,
+          five_hour_resets_at: fiveHourResetsAt,
+          seven_day_pct: sevenDayPct ?? 0,
+          seven_day_resets_at: sevenDayResetsAt,
+        })
+      }
+    }
+
     return NextResponse.json({ ok: true })
   } catch {
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })

@@ -1,10 +1,11 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').trim()
+  const token = new URL(request.url).searchParams.get('token') || ''
 
   const script = `
-param([string]$Token)
+$Token = "${token}"
 if (-not $Token) { Write-Host "Usage: irm '${appUrl}/api/setup-win?token=<API_TOKEN>' | iex"; exit 1 }
 
 $ErrorActionPreference = "Stop"
@@ -25,6 +26,9 @@ Set-Content -Path (Join-Path $ConfigDir "api_url") -Value "${appUrl}" -NoNewline
 # 4. report-usage.js 다운로드
 Invoke-WebRequest -Uri "${appUrl}/report-usage.js" -OutFile (Join-Path $ConfigDir "report-usage.js")
 
+# 4.5. statusline-collector.js 다운로드
+Invoke-WebRequest -Uri "${appUrl}/statusline-collector.js" -OutFile (Join-Path $ConfigDir "statusline-collector.js")
+
 # 5. Claude Code settings.json에 Stop hook 추가 (기존 hook 보존)
 $claudeDir = Join-Path $env:USERPROFILE ".claude"
 if (-not (Test-Path $ClaudeSettings)) {
@@ -44,6 +48,20 @@ node -e "
     s.hooks.Stop.push({matcher:'.*',hooks:[{type:'command',command:'node ' + process.env.USERPROFILE.replace(/\\\\\\\\/g,'/') + '/.config/socar-board/report-usage.js'}]});
     fs.writeFileSync(p, JSON.stringify(s, null, 2));
   }
+"
+
+# 6. statusLine 등록 (기존 statusLine 백업 후 교체)
+node -e "
+  const fs = require('fs');
+  const p = process.env.USERPROFILE + '/.claude/settings.json';
+  const s = JSON.parse(fs.readFileSync(p,'utf8'));
+  const cmd = s.statusLine && s.statusLine.command;
+  if (cmd && cmd.includes('socar-board')) process.exit(0);
+  if (cmd) {
+    fs.writeFileSync(process.env.USERPROFILE.replace(/\\\\\\\\/g,'/') + '/.config/socar-board/original_statusline_cmd', cmd);
+  }
+  s.statusLine = {type:'command',command:'node ' + process.env.USERPROFILE.replace(/\\\\\\\\/g,'/') + '/.config/socar-board/statusline-collector.js'};
+  fs.writeFileSync(p, JSON.stringify(s, null, 2));
 "
 
 Write-Host ""

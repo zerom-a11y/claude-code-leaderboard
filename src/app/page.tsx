@@ -1,11 +1,9 @@
 'use client'
-import dynamic from 'next/dynamic'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import LeaderboardTable from '@/components/LeaderboardTable'
 import CurlCommand from '@/components/CurlCommand'
-
-const PeriodTabs = dynamic(() => import('@/components/PeriodTabs'), { ssr: false })
-const RoleTabs = dynamic(() => import('@/components/RoleTabs'), { ssr: false })
+import PeriodTabs from '@/components/PeriodTabs'
+import RoleTabs from '@/components/RoleTabs'
 
 const BADGE_TIERS = [
   { threshold: 10_000_000_000, emoji: '👑' },
@@ -32,37 +30,28 @@ export default function Home() {
   const [setupOpen, setSetupOpen] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
-  const fetchLeaderboard = (silent = false) => {
+  const fetchLeaderboard = useCallback((silent = false) => {
     if (!silent) setLoading(true)
     fetch(`/api/leaderboard?period=${period}&role=${role}`)
       .then(res => res.json())
       .then(json => {
         setData(json.data || [])
+        if (json.api_token) setApiToken(json.api_token)
         setLoading(false)
         setLastUpdated(new Date())
       })
       .catch(() => setLoading(false))
-  }
+  }, [period, role])
 
   useEffect(() => {
     fetchLeaderboard()
-  }, [period, role])
+  }, [fetchLeaderboard])
 
   // 1분마다 백그라운드 새로고침
   useEffect(() => {
     const interval = setInterval(() => fetchLeaderboard(true), 60000)
     return () => clearInterval(interval)
-  }, [period, role])
-
-  useEffect(() => {
-    fetch('/api/me')
-      .then(res => {
-        if (!res.ok) throw new Error('unauthorized')
-        return res.json()
-      })
-      .then(json => { if (json.profile?.api_token) setApiToken(json.profile.api_token) })
-      .catch(() => setApiToken(''))
-  }, [])
+  }, [fetchLeaderboard])
 
   return (
     <div className="space-y-6">

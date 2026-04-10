@@ -2,7 +2,7 @@
 
 type Entry = {
   rank: number
-  user_id?: string
+  user_id: string
   nickname: string
   department: string
   total_tokens: number
@@ -10,6 +10,10 @@ type Entry = {
   buddy?: boolean
   bio?: string
   isMe?: boolean
+  five_hour_pct?: number | null
+  seven_day_pct?: number | null
+  seven_day_resets_at?: string | null
+  hit_100_count?: number
 }
 
 const BADGE_TIERS = [
@@ -32,6 +36,23 @@ function formatTokens(n: number): string {
   return n.toString()
 }
 
+function pctColor(pct: number | null | undefined): string {
+  if (pct == null) return 'text-gray-600'
+  if (pct >= 90) return 'text-red-400'
+  if (pct >= 70) return 'text-yellow-400'
+  return 'text-green-400'
+}
+
+function formatResetDate(iso: string | null | undefined): string {
+  if (!iso) return '-'
+  const d = new Date(iso)
+  const month = d.getMonth() + 1
+  const day = d.getDate()
+  const hours = d.getHours().toString().padStart(2, '0')
+  const mins = d.getMinutes().toString().padStart(2, '0')
+  return `${month}/${day} ${hours}:${mins}`
+}
+
 export default function LeaderboardTable({ data, loading }: { data: Entry[]; loading: boolean }) {
   if (loading) {
     return <div className="text-center py-12 text-gray-500">불러오는 중...</div>
@@ -41,20 +62,30 @@ export default function LeaderboardTable({ data, loading }: { data: Entry[]; loa
     return <div className="text-center py-12 text-gray-500">아직 데이터가 없습니다.</div>
   }
 
+  // rate limit 데이터가 하나라도 있는지 확인
+  const hasRateLimit = data.some(e => e.five_hour_pct != null || e.seven_day_pct != null)
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full">
         <thead>
           <tr className="border-b border-gray-800 text-gray-400 text-sm">
-            <th className="py-3 px-4 text-left w-16">#</th>
+            <th className="py-3 px-4 text-left w-12">#</th>
             <th className="py-3 px-4 text-left">닉네임</th>
             <th className="py-3 pl-0 pr-4 text-left whitespace-nowrap">부서</th>
             <th className="py-3 px-4 text-right whitespace-nowrap">사용량</th>
+            {hasRateLimit && (
+              <>
+                <th className="py-3 px-2 text-right whitespace-nowrap" title="5시간 세션 사용량 100% 도달 횟수 (누적)">5H세션풀</th>
+                <th className="py-3 px-2 text-right whitespace-nowrap" title="7일 주간 사용량 비율 (최신)">주간세션</th>
+                <th className="py-3 px-2 text-right whitespace-nowrap" title="7일 주간 사용량 리셋 예정 일시">주간리셋</th>
+              </>
+            )}
           </tr>
         </thead>
         <tbody>
           {data.map(entry => (
-            <tr key={entry.user_id || entry.rank}
+            <tr key={entry.user_id}
               className={`border-b border-gray-800/50 ${entry.isMe ? 'bg-blue-500/10' : 'hover:bg-gray-800/50'}`}>
               <td className="py-3 px-4 font-mono text-gray-400">
                 {entry.rank <= 3 ? ['\u{1F947}', '\u{1F948}', '\u{1F949}'][entry.rank - 1] : entry.rank}
@@ -67,6 +98,19 @@ export default function LeaderboardTable({ data, loading }: { data: Entry[]; loa
               </td>
               <td className="py-3 pl-0 pr-4 text-gray-400 whitespace-nowrap">{entry.department}</td>
               <td className="py-3 px-4 text-right font-mono">{formatTokens(entry.total_tokens)}</td>
+              {hasRateLimit && (
+                <>
+                  <td className="py-3 px-2 text-right font-mono text-sm text-orange-400">
+                    {entry.hit_100_count != null ? entry.hit_100_count : '-'}
+                  </td>
+                  <td className={`py-3 px-2 text-right font-mono text-sm ${pctColor(entry.seven_day_pct)}`}>
+                    {entry.seven_day_pct != null ? `${Math.round(entry.seven_day_pct)}%` : '-'}
+                  </td>
+                  <td className="py-3 px-2 text-right font-mono text-xs text-gray-500">
+                    {formatResetDate(entry.seven_day_resets_at)}
+                  </td>
+                </>
+              )}
             </tr>
           ))}
         </tbody>

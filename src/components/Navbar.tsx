@@ -1,4 +1,5 @@
 'use client'
+import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 
@@ -22,10 +23,10 @@ export default function Navbar() {
     <nav className="border-b border-gray-800 mb-8">
       <div className="max-w-4xl mx-auto px-4 flex items-center justify-between h-14">
         <div className="flex items-center gap-6">
-          <a href="/" className="font-bold text-lg">Claude Code Leaderboard</a>
+          <Link href="/" className="font-bold text-lg">Claude Code Leaderboard</Link>
           <div className="flex gap-1">
             {links.map(link => (
-              <a
+              <Link
                 key={link.href}
                 href={link.href}
                 className={`px-3 py-1.5 rounded-md text-sm transition ${
@@ -35,7 +36,7 @@ export default function Navbar() {
                 }`}
               >
                 {link.label}
-              </a>
+              </Link>
             ))}
           </div>
         </div>

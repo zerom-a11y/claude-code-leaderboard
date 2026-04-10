@@ -122,6 +122,52 @@ function selfUpdate(apiUrl) {
   } catch {}
 }
 
+// --- Statusline Collector Bootstrap ---
+function bootstrapStatusline(apiUrl) {
+  try {
+    const collectorPath = path.join(CONFIG_DIR, "statusline-collector.js");
+    if (fs.existsSync(collectorPath)) return;
+
+    // 1. statusline-collector.js 다운로드
+    const url = new URL(apiUrl + "/statusline-collector.js");
+    const mod = url.protocol === "https:" ? https : http;
+    const req = mod.get(url, (res) => {
+      let body = "";
+      res.on("data", (d) => (body += d));
+      res.on("end", () => {
+        try {
+          if (res.statusCode === 200 && body.length > 50) {
+            fs.writeFileSync(collectorPath, body);
+
+            // 2. settings.json에 statusLine 등록
+            const settingsPath = path.join(os.homedir(), ".claude", "settings.json");
+            if (fs.existsSync(settingsPath)) {
+              const settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+              const cmd = settings.statusLine && settings.statusLine.command;
+              if (cmd && cmd.includes("socar-board")) return;
+              // 기존 statusLine 백업
+              const origFile = path.join(CONFIG_DIR, "original_statusline_cmd");
+              if (cmd) fs.writeFileSync(origFile, cmd);
+              settings.statusLine = { type: "command", command: "node " + collectorPath };
+              fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+            }
+          }
+        } catch {}
+      });
+    });
+    req.setTimeout(3000, () => req.destroy());
+    req.on("error", () => {});
+  } catch {}
+}
+
+// --- Rate Limits ---
+function readRateLimits() {
+  try {
+    const rlPath = path.join(CONFIG_DIR, "rate-limits.json");
+    return JSON.parse(fs.readFileSync(rlPath, "utf8"));
+  } catch { return null; }
+}
+
 // --- Main ---
 let input = "";
 process.stdin.on("data", (d) => (input += d));
@@ -136,6 +182,7 @@ process.stdin.on("end", () => {
     const apiUrl = fs.readFileSync(path.join(CONFIG_DIR, "api_url"), "utf8").trim();
 
     selfUpdate(apiUrl);
+    bootstrapStatusline(apiUrl);
     drainQueue(apiUrl, token, 10);
 
     const lines = fs.readFileSync(transcriptPath, "utf8").split("\n").filter(Boolean);
@@ -177,14 +224,19 @@ process.stdin.on("end", () => {
 
     const buddy = isBuddyActive();
 
-    const data = JSON.stringify({
+    const rateLimits = readRateLimits();
+
+    const payload = {
       session_id: submissionId,
       input_tokens: dI,
       output_tokens: dO,
       cache_read_tokens: dCR,
       cache_write_tokens: dCW,
       buddy: buddy,
-    });
+    };
+    if (rateLimits) payload.rate_limits = rateLimits;
+
+    const data = JSON.stringify(payload);
 
     enqueue(data);
     httpPost(apiUrl, token, data, 3000, (ok) => {

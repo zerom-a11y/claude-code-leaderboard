@@ -25,6 +25,9 @@ echo -n "${appUrl}" > "$CONFIG_DIR/api_url"
 # 4. report-usage.js 다운로드
 curl -sL "${appUrl}/report-usage.js" > "$CONFIG_DIR/report-usage.js"
 
+# 4.5. statusline-collector.js 다운로드
+curl -sL "${appUrl}/statusline-collector.js" > "$CONFIG_DIR/statusline-collector.js"
+
 # 5. Claude Code settings.json에 Stop hook 추가 (기존 hook 보존)
 if [ ! -f "$CLAUDE_SETTINGS" ]; then
   mkdir -p "$HOME/.claude"
@@ -42,6 +45,20 @@ node -e "
     s.hooks.Stop.push({matcher:'.*',hooks:[{type:'command',command:'node ' + process.env.HOME + '/.config/socar-board/report-usage.js'}]});
     fs.writeFileSync(p, JSON.stringify(s, null, 2));
   }
+"
+
+# 6. statusLine 등록 (기존 statusLine 백업 후 교체)
+node -e "
+  const fs = require('fs');
+  const p = process.env.HOME + '/.claude/settings.json';
+  const s = JSON.parse(fs.readFileSync(p,'utf8'));
+  const cmd = s.statusLine && s.statusLine.command;
+  if (cmd && cmd.includes('socar-board')) process.exit(0);
+  if (cmd) {
+    fs.writeFileSync(process.env.HOME + '/.config/socar-board/original_statusline_cmd', cmd);
+  }
+  s.statusLine = {type:'command',command:'node ' + process.env.HOME + '/.config/socar-board/statusline-collector.js'};
+  fs.writeFileSync(p, JSON.stringify(s, null, 2));
 "
 
 echo ""
