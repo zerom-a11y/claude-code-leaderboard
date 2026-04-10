@@ -86,17 +86,17 @@ export default function LeaderboardTable({ data, loading }: { data: Entry[]; loa
         <tbody>
           {data.map(entry => (
             <tr key={entry.user_id}
-              className={`border-b border-gray-800/50 ${entry.isMe ? 'bg-blue-500/10' : 'hover:bg-gray-800/50'}`}>
-              <td className="py-3 px-4 font-mono text-gray-400">
+              className={`group border-b border-gray-800/50 ${entry.isMe ? 'bg-blue-500/10' : 'hover:bg-gray-800/50'}`}>
+              <td className="py-3 px-4 font-mono text-gray-400 group-hover:text-gray-300">
                 {entry.rank <= 3 ? ['\u{1F947}', '\u{1F948}', '\u{1F949}'][entry.rank - 1] : entry.rank}
               </td>
               <td className="py-3 px-4 font-medium">
                 <span className="mr-1">{getBadge(entry.all_time_tokens)}</span>
                 {entry.nickname}
                 {entry.isMe && <span className="text-blue-400 text-xs ml-1">나</span>}
-                {entry.bio && <span className="ml-5 text-sm text-gray-400 font-normal">{entry.bio}</span>}
+                {entry.bio && <span className="ml-5 text-sm text-gray-400 group-hover:text-gray-300 font-normal">{entry.bio}</span>}
               </td>
-              <td className="py-3 pl-0 pr-4 text-gray-400 whitespace-nowrap">{entry.department}</td>
+              <td className="py-3 pl-0 pr-4 text-gray-400 group-hover:text-gray-300 whitespace-nowrap">{entry.department}</td>
               <td className="py-3 px-4 text-right font-mono">{formatTokens(entry.total_tokens)}</td>
               {hasRateLimit && (
                 <>
@@ -106,7 +106,7 @@ export default function LeaderboardTable({ data, loading }: { data: Entry[]; loa
                   <td className={`py-3 px-2 text-right font-mono text-sm ${pctColor(entry.seven_day_pct)}`}>
                     {entry.seven_day_pct != null ? `${Math.round(entry.seven_day_pct)}%` : '-'}
                   </td>
-                  <td className="py-3 px-2 text-right font-mono text-xs text-gray-500">
+                  <td className="py-3 px-2 text-right font-mono text-xs text-gray-500 group-hover:text-gray-400">
                     {formatResetDate(entry.seven_day_resets_at)}
                   </td>
                 </>
