@@ -21,7 +21,7 @@ export default function Navbar() {
 
   return (
     <nav className="border-b border-gray-800 mb-8">
-      <div className="max-w-4xl mx-auto px-4 flex items-center justify-between h-14">
+      <div className="max-w-5xl mx-auto px-4 flex items-center justify-between h-14">
         <div className="flex items-center gap-6">
           <Link href="/" className="font-bold text-lg">Claude Code Leaderboard</Link>
           <div className="flex gap-1">

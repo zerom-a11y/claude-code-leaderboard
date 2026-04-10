@@ -76,9 +76,9 @@ export default function LeaderboardTable({ data, loading }: { data: Entry[]; loa
             <th className="py-3 px-4 text-right whitespace-nowrap">사용량</th>
             {hasRateLimit && (
               <>
-                <th className="py-3 px-2 text-right whitespace-nowrap" title="5시간 세션 사용량 100% 도달 횟수 (누적)">5H세션풀</th>
-                <th className="py-3 px-2 text-right whitespace-nowrap" title="7일 주간 사용량 비율 (최신)">주간세션</th>
-                <th className="py-3 px-2 text-right whitespace-nowrap" title="7일 주간 사용량 리셋 예정 일시">주간리셋</th>
+                <th className="py-3 px-2 text-right whitespace-nowrap" title="5시간 세션 사용률 (최신)">5h</th>
+                <th className="py-3 px-2 text-right whitespace-nowrap" title="7일 주간 사용량 비율 (최신)">7d</th>
+                <th className="py-3 px-2 text-right whitespace-nowrap" title="7일 주간 사용량 리셋 예정 일시">reset</th>
               </>
             )}
           </tr>
@@ -100,8 +100,8 @@ export default function LeaderboardTable({ data, loading }: { data: Entry[]; loa
               <td className="py-3 px-4 text-right font-mono">{formatTokens(entry.total_tokens)}</td>
               {hasRateLimit && (
                 <>
-                  <td className="py-3 px-2 text-right font-mono text-sm text-orange-400">
-                    {entry.hit_100_count != null ? entry.hit_100_count : '-'}
+                  <td className={`py-3 px-2 text-right font-mono text-sm ${pctColor(entry.five_hour_pct)}`}>
+                    {entry.five_hour_pct != null ? `${Math.round(entry.five_hour_pct)}%` : '-'}
                   </td>
                   <td className={`py-3 px-2 text-right font-mono text-sm ${pctColor(entry.seven_day_pct)}`}>
                     {entry.seven_day_pct != null ? `${Math.round(entry.seven_day_pct)}%` : '-'}
