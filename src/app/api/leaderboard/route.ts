@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
     if (rpcError) return NextResponse.json({ error: rpcError.message }, { status: 500 })
     if (!leaderboard || leaderboard.length === 0) {
       return NextResponse.json({ data: [] }, {
-        headers: { 'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30' },
+        headers: { 'Cache-Control': 'private, max-age=30' },
       })
     }
 
@@ -147,7 +147,7 @@ export async function GET(request: NextRequest) {
     })
 
     return NextResponse.json({ data: result, api_token: apiToken }, {
-      headers: { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60' },
+      headers: { 'Cache-Control': 'private, max-age=30' },
     })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error'
