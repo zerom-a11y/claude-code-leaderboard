@@ -154,9 +154,12 @@ export default function MyPage() {
                 <div className={`text-xs font-medium ${earned ? 'text-gray-900' : 'text-gray-400'}`}>
                   {badge.name}
                 </div>
+                <div className={`text-xs mt-0.5 ${earned ? 'text-gray-500' : 'text-gray-400'}`}>
+                  {badge.description}
+                </div>
                 {earned && (
-                  <div className="text-xs text-gray-400 mt-0.5">
-                    {new Date(earned.earned_at).toLocaleDateString('ko-KR')}
+                  <div className="text-xs text-blue-500 mt-0.5">
+                    {new Date(earned.earned_at).toLocaleDateString('ko-KR')} 달성
                   </div>
                 )}
               </div>

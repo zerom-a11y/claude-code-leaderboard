@@ -1,7 +1,5 @@
 'use client'
 
-import { ACHIEVEMENT_BADGES } from '@/lib/badges'
-
 type Entry = {
   rank: number
   user_id?: string
@@ -9,7 +7,6 @@ type Entry = {
   department: string
   total_tokens: number
   all_time_tokens: number
-  badges?: string[]
   buddy?: boolean
   bio?: string
   isMe?: boolean
@@ -51,7 +48,6 @@ export default function LeaderboardTable({ data, loading }: { data: Entry[]; loa
           <tr className="border-b border-gray-800 text-gray-400 text-sm">
             <th className="py-3 px-4 text-left w-16">#</th>
             <th className="py-3 px-4 text-left">닉네임</th>
-            <th className="py-3 px-2 text-left whitespace-nowrap">업적</th>
             <th className="py-3 pl-0 pr-4 text-left whitespace-nowrap">부서</th>
             <th className="py-3 px-4 text-right whitespace-nowrap">사용량</th>
           </tr>
@@ -68,18 +64,6 @@ export default function LeaderboardTable({ data, loading }: { data: Entry[]; loa
                 {entry.nickname}
                 {entry.isMe && <span className="text-blue-400 text-xs ml-1">나</span>}
                 {entry.bio && <span className="ml-5 text-sm text-gray-400 font-normal">{entry.bio}</span>}
-              </td>
-              <td className="py-3 px-2 whitespace-nowrap" title={
-                (entry.badges || [])
-                  .map(key => ACHIEVEMENT_BADGES.find(b => b.key === key))
-                  .filter(Boolean)
-                  .map(b => `${b!.emoji} ${b!.name}: ${b!.description}`)
-                  .join('\n')
-              }>
-                {(entry.badges || [])
-                  .map(key => ACHIEVEMENT_BADGES.find(b => b.key === key)?.emoji)
-                  .filter(Boolean)
-                  .join('')}
               </td>
               <td className="py-3 pl-0 pr-4 text-gray-400 whitespace-nowrap">{entry.department}</td>
               <td className="py-3 px-4 text-right font-mono">{formatTokens(entry.total_tokens)}</td>
